@@ -1,0 +1,34 @@
+// Name: Explorer Parent Shell Execution Detection
+// Author: MFA meex
+// Date: 2026-02-20
+// Description: Detects common shell or script processes spawned by explorer.exe, which may indicate execution via the Windows Run dialog. This behavior aligns with ClickFix social engineering techniques and checks for suspicious cmd arguments tied to this pattern.
+// Reference: https://www.microsoft.com/en-us/security/blog/2025/08/21/think-before-you-clickfix-analyzing-the-clickfix-social-engineering-technique/
+//Note: To reduce false positives, an exculsion of scripts, commands, and / or users should be added.
+
+let suspicious_processes = dynamic([
+    "powershell.exe",
+    "cmd.exe",
+    "wscript.exe",
+    "mshta.exe",
+    "curl.exe",
+    "rundll32.exe",
+    "bitsadmin.exe"
+]);
+
+DeviceProcessEvents
+// Identifies shell/scripting processes spawned by explorer.exe, a common indicator of Run dialog (Win+R) usage.
+| where InitiatingProcessFileName == "explorer.exe"
+    and FileName in (suspicious_processes)
+// Filters for suspicious command-line arguments and patterns commonly used in ClickFix attacks to download or execute malicious code.
+| where ProcessCommandLine has_any (
+        // Common PowerShell downloaders and execution flags
+        "iex ", "iwr ", "irm ", "Invoke-Expression", "Invoke-WebRequest",
+         "Invoke-RestMethod", "DownloadString", "DownloadFile", 
+         "FromBase64String", "-w hidden", "-ep bypass", "-enc ",
+        // MSHTA executing remote scripts
+        "mshta.exe http", "mshta.exe javascript:",
+        // Other LOLBins used for downloading or proxying execution
+        "rundll32.exe javascript:", "bitsadmin /transfer", "curl.exe -o",
+        // Command-line obfuscation characters
+        " ^", " & "
+    )
