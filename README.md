@@ -1,2 +1,2 @@
 # detection-engineering
-Threat detections developed based on threat intelligence.
+This repository showcases my work designing, implementing, and validating behavioral detections using endpoint and log telemetry. The focus is on translating adversary TTP's into reliable detection logic while accounting for tuning, false positives, and operational impact. Each detection includes clear documentation of the data source(s) used, engineering considerations, and validation methodology.
