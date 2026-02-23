@@ -1,0 +1,50 @@
+// Name: New Application Consent Grant
+// Author: MFA meex
+// Date: 2026-02-22
+// References: https://learn.microsoft.com/en-us/microsoft-365/security/office-365-security/detect-and-remediate-illicit-consent-grants
+// Description: Detects when a user grants consent to an application that has not been seen in the environment before.
+// Note: You will need to add new apps to trusted_app_ids to reduce false positives
+
+// Define the lookback period for baseline of known applications.
+let baseline_period = 30d;
+// Define the detection window for new consents.
+let detection_window = 1d;
+
+// Placeholder for allow list of trusted application IDs.
+let trusted_app_ids = dynamic([]);
+
+// Find all application IDs that have been consented to or added in the baseline period.
+let known_app_ids = AuditLogs
+| where TimeGenerated between (ago(baseline_period) .. ago(detection_window))
+| where Category == "ApplicationManagement" and OperationName in ("Consent to application", "Add service principal")
+| where Result == "success"
+| mv-expand TargetResources
+| where isnotempty(TargetResources.id)
+| summarize make_set(tostring(TargetResources.id));
+
+// Look for recent consent grants or service principal additions.
+AuditLogs
+| where TimeGenerated > ago(detection_window)
+| where Category == "ApplicationManagement" and OperationName in ("Consent to application", "Add service principal")
+| where Result == "success"
+// Parse the user and application details from the log entry.
+| extend InitiatingUser = tostring(InitiatedBy.user.userPrincipalName)
+| extend InitiatingIpAddress = tostring(InitiatedBy.ip.address)
+| mv-expand TargetResources
+| extend AppName = tostring(TargetResources.displayName)
+| extend AppId = tostring(TargetResources.id)
+| where isnotempty(AppId)
+// If the AppId is from a recent event and not in the baseline, fire off.
+| where AppId !in (known_app_ids) and AppId !in (trusted_app_ids)
+// Summarize alerts to reduce noise, grouping by the new application and the user who granted consent.
+| summarize
+    StartTime = min(TimeGenerated),
+    EndTime = max(TimeGenerated),
+    OperationNames = make_set(OperationName),
+    InitiatingIpAddresses = make_set(InitiatingIpAddress)
+    by AppName, AppId, InitiatingUser, TenantId
+| extend
+    timestamp = StartTime,
+    AccountCustomEntity = InitiatingUser,
+    IpCustomEntity = InitiatingIpAddresses,
+    AppCustomEntity = AppName
