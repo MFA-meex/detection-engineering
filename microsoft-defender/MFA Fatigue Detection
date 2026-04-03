@@ -1,0 +1,27 @@
+// Name: MFA Fatigue Detection
+// Author: MFA meex 
+// Date: 2026-04-03
+// Description: Detects multiple mfa attempts that are denied or ignored beyond the threshold
+// References: https://northwave-cybersecurity.com/threat-intel-research/how-to-use-and-defend-against-mfa-fatigue-attacks
+// Note: To reduce false positives, determine an appropriate threshold and / or set a trusted list of IPs / Locations 
+
+// Define the threshold for failed MFA prompts and the lookback window
+let MFA_threshold = 10;
+let lookback = 1h;
+
+SigninLogs
+| where TimeGenerated >= ago(lookback)
+| where AuthenticationRequirement == "multiFactorAuthentication"
+| where ResultType in (500121, 50074)
+// Check if the user denied or ignored the mobile app notification
+| extend MFA_denied = tostring(Status) has "user declined the authentication"
+| extend MFA_ignored = tostring(Status) has "user did not respond to mobile app notification"
+| where MFA_denied or MFA_ignored
+// Summarize the events to identify high-volume fatigue attempts
+| summarize 
+    MFA_count = count(),
+    IPAddresses = make_set(IPAddress),
+    Apps = make_set(AppDisplayName),
+    Locations = make_set(LocationDetails)
+    by UserPrincipalName, bin(TimeGenerated, 1h)
+| where MFA_count >= MFA_threshold
