@@ -1,1 +1,1 @@
-KQL-based detections designed for Microsoft Sentinel using Defender and Entra ID telemetry. Focused on practical, real-world attack patterns and detection logic.
+KQL-based detection rules across Microsoft Sentinel, Defender, and Entra ID. This work focuses on identifying identity-based attacks, cloud attacks, and AI attack techniques mapped to common intrusion patterns.
