@@ -1,0 +1,21 @@
+// Name: AI Prompt Injection via URL Fragments (HashJack)
+// Author: MFA meex
+// Date: 2026-04-21
+// Description: Detects potential “HashJack” prompt injection attempts in AI tool activity. This technique, known as HashJack, attempts to manipulate AI models by hiding instructions after the '#' in a URL.
+// Reference: https://www.microsoft.com/en-us/security/blog/2026/03/12/detecting-analyzing-prompt-abuse-in-ai-tools/
+// Note: To reduce false positives, exclude trusted domains.
+
+CloudAppEvents
+| where ActionType has_any ("PromptSubmitted", "ChatInteraction")
+// Extract the prompt text from the raw event data
+| extend PromptText = tostring(RawEventData.PromptText)
+| where isnotempty(PromptText)
+| extend ExtractedURLs = extract_all(@"https?://[^\s]+", PromptText)
+| mv-expand URL = ExtractedURLs
+// Convert URL field into a consistent string format
+| extend URLString = tostring(URL)
+// Identify URLs containing fragments (#...) with suspicious prompt injection keywords
+// Matches variations like "ignore previous", "override instructions", etc.
+// Case-insensitive and accounts for encoding like %20 or separators like '-' and '_'
+| where URLString matches regex @"(?i)#.*(ignore[_\-%20]*previous|summarise[_\-%20]*this|system[_\-%20]*prompt|override[_\-%20]*instructions|disregard[_\-%20]*previous|new[_\-%20]*instruction)"
+| project TimeGenerated, AccountName, Application, ActionType, PromptText, URLString, IPAddress
