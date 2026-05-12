@@ -1,0 +1,24 @@
+// Name: AI Service Principal Accessing Sensitive Data
+// Author: MFA meex
+// Date: 2026-05-12
+// Description: Detects AI service principals or applications accessing a high volume of unique files in sensitive sites in short period.
+// Note: Tune thresholds and exclude permitted app IDs
+
+
+OfficeActivity
+| where RecordType == "SharePointFileOperation"
+| where Operation in ("FileDownloaded", "FileAccessed", "FilePreviewed", "FileSyncDownloadedFull")
+// Filter for common AI service principal names or client apps
+| where UserId has_any ("OpenAI", "Copilot", "Cognitive", "AI-", "-AI", "MachineLearning") 
+   or ClientAppName has_any ("OpenAI", "Copilot", "Cognitive Services")
+// Filter for sensitive site URLs
+| where SiteUrl has_any ("hr", "finance", "legal", "sourcecode", "confidential", "payroll")
+// Aggregate by user (AI service) and site over a 15-minute window
+| summarize 
+    UniqueFilesAccessed = dcount(SourceFileName),
+    SampleFiles = make_set(SourceFileName, 5),
+    StartTime = min(TimeGenerated)
+    by UserId, ClientAppName, SiteUrl, bin(TimeGenerated, 15m)
+| where UniqueFilesAccessed >= 50
+| project StartTime, UserId, ClientAppName, SiteUrl, UniqueFilesAccessed, SampleFiles
+| order by UniqueFilesAccessed desc
