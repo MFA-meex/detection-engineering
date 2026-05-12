@@ -1,0 +1,15 @@
+// Name: Multi-IP Session Token Reuse
+// Author: MFA meex
+// Date: 2026-05-11
+// Description: Detects session reuse patterns consistent with stolen cookies or token replay attacks.
+// Reference: https://learn.microsoft.com/en-us/security/operations/token-theft-playbook
+
+SigninLogs
+| where ResultType == 0
+| summarize
+    IPCount = dcount(IPAddress),
+    IPList = make_set(IPAddress, 10),
+    StartTime = min(TimeGenerated) // Capture the earliest TimeGenerated for the bin
+    by UserPrincipalName, bin(TimeGenerated, 30m)
+| where IPCount >= 3
+| project StartTime, UserPrincipalName, IPCount, IPList
