@@ -1,0 +1,14 @@
+// Name: AI Prompt Injection via Role Override Language
+// Author: MFA meex
+// Date: 2026-05-11
+// Description: Detects potential prompt injection attempts where users attempt to override AI system behavior using role manipulation or jailbreak phrasing.
+// Reference: https://snyk.io/articles/understanding-prompt-injection-techniques-challenges-and-risks/
+// Note: Tune exclusions for internal testing environments or red team exercises.
+
+CloudAppEvents
+| where ActionType has_any ("PromptSubmitted", "ChatInteraction")
+| extend PromptText = tostring(RawEventData.PromptText)
+| where isnotempty(PromptText)
+// Detect common jailbreak or role override language
+| where PromptText matches regex @"(?i)(ignore\s+previous\s+instructions|act\s+as\s+system|you\s+are\s+now|developer\s+mode|reveal\s+system\s+prompt|bypass\s+safeguards|override\s+instructions)"
+| project TimeGenerated, AccountName, Application, ActionType, PromptText, IPAddress
