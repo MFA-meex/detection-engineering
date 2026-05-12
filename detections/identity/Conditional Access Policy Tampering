@@ -1,0 +1,39 @@
+// Name: Conditional Access Policy Tampering
+// Author: MFA meex
+// Date: 2026-05-12
+// Description: Detects creation, modification, or disabling of Conditional Access policies.
+// Reference: https://learn.microsoft.com/en-us/entra/identity/conditional-access/concept-conditional-access-policies
+// Note: Tuning can be done by filtering out authorized automation accounts or break-glass admins
+
+AuditLogs
+| where Category == "Policy"
+| where ActivityDisplayName has "Conditional Access policy"
+// Extract actor details
+| extend Actor = coalesce(
+    tostring(InitiatedBy.user.userPrincipalName),
+    tostring(InitiatedBy.app.displayName),
+    "Unknown"
+)
+// Identify the target policy name
+| extend TargetPolicy = tostring(TargetResources[0].displayName)
+// Extract the policy state change
+| extend StateChange = extract(@'\"displayName\"\s*:\s*\"State\"[^}]+?\"newValue\"\s*:\s*\"[\[\?\"]?([^\"\]]+)', 1, tostring(TargetResources[0].modifiedProperties))
+| extend StateChange = iff(isnotempty(StateChange), StateChange, "Other Modification")
+// Aggregate events by Actor in 1-hour windows to detect bursts of changes
+| summarize
+    EventCount = count(),
+    PoliciesAffected = make_set(TargetPolicy, 10),
+    Operations = make_set(ActivityDisplayName, 10),
+    StateResults = make_set(StateChange, 5),
+    StartTime = min(TimeGenerated),
+    EndTime = max(TimeGenerated)
+    by Actor, bin(TimeGenerated, 1h)
+| project
+    StartTime,
+    EndTime,
+    Actor,
+    EventCount,
+    PoliciesAffected,
+    Operations,
+    StateResults
+| sort by StartTime desc
