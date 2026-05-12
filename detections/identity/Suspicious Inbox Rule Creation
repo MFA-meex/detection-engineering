@@ -1,0 +1,13 @@
+// Name: Suspicious Inbox Rule Creation
+// Author: MFA meex
+// Date: 2026-05-11
+// Description: Detects suspicious inbox rule creation or modification activity in Exchange.
+// Reference: https://learn.microsoft.com/en-us/defender-xdr/alert-grading-playbook-inbox-manipulation-rules
+// Note: Tune known administrative accounts / service accounts to reduce false positives. Good chance for false positives, better for smaller orgs.
+
+OfficeActivity
+| where OfficeWorkload == "Exchange"
+// Detect newly created or modified inbox rules
+| where Operation in~ ("New-InboxRule", "Set-InboxRule")
+| project TimeGenerated, UserId, ClientIP, Operation, Parameters, ResultStatus
+| sort by TimeGenerated desc
